@@ -139,6 +139,27 @@ func (r *Repo[T]) Update(ctx context.Context, tx *gorm.DB, ent *T) error {
 	return db.WithContext(ctx).Save(ent).Error
 }
 
+// UpdateColumn updates a single column for records matching the provided scopes.
+// At least one scope must be provided to prevent accidental update of all records.
+// If tx is provided, the operation is performed within that transaction.
+func (r *Repo[T]) UpdateColumn(ctx context.Context, tx *gorm.DB, column string, value any, scopes ...Scope) error {
+	if len(scopes) == 0 {
+		return ErrDangerous
+	}
+	return r.scWithTX(tx, ctx, scopes...).Update(column, value).Error
+}
+
+// UpdateColumns updates multiple columns for records matching the provided scopes.
+// At least one scope must be provided to prevent accidental update of all records.
+// If tx is provided, the operation is performed within that transaction.
+// The updates parameter can be a map[string]any or a struct.
+func (r *Repo[T]) UpdateColumns(ctx context.Context, tx *gorm.DB, updates any, scopes ...Scope) error {
+	if len(scopes) == 0 {
+		return ErrDangerous
+	}
+	return r.scWithTX(tx, ctx, scopes...).Updates(updates).Error
+}
+
 // Delete removes records from the database based on the provided conditions.
 // At least one scope must be provided to prevent accidental deletion of all records.
 // If tx is provided, the operation is performed within that transaction.

@@ -272,6 +272,191 @@ func TestRepo_Update_WithTransaction(t *testing.T) {
 	assert.Equal(t, "John Updated", found.Name)
 }
 
+func TestRepo_UpdateColumn(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := gormplus.NewRepo[User](db)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	user := &User{
+		Name:  "John Doe",
+		Email: "john@example.com",
+		Age:   30,
+	}
+
+	// Create first
+	err = repo.Create(ctx, nil, user)
+	require.NoError(t, err)
+
+	// Update single column
+	err = repo.UpdateColumn(ctx, nil, "name", "John Updated", gormplus.Where("id = ?", user.ID))
+
+	assert.NoError(t, err)
+
+	// Verify update
+	found, err := repo.First(ctx, gormplus.Where("id = ?", user.ID))
+	assert.NoError(t, err)
+	assert.Equal(t, "John Updated", found.Name)
+	assert.Equal(t, "john@example.com", found.Email) // Email should remain unchanged
+	assert.Equal(t, 30, found.Age)                   // Age should remain unchanged
+}
+
+func TestRepo_UpdateColumn_WithoutScopes(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := gormplus.NewRepo[User](db)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	err = repo.UpdateColumn(ctx, nil, "name", "Updated Name")
+
+	assert.Equal(t, gormplus.ErrDangerous, err)
+}
+
+func TestRepo_UpdateColumn_WithTransaction(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := gormplus.NewRepo[User](db)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	user := &User{
+		Name:  "John Doe",
+		Email: "john@example.com",
+		Age:   30,
+	}
+
+	// Create first
+	err = repo.Create(ctx, nil, user)
+	require.NoError(t, err)
+
+	// Update within transaction
+	err = db.Transaction(func(tx *gorm.DB) error {
+		return repo.UpdateColumn(ctx, tx, "age", 31, gormplus.Where("id = ?", user.ID))
+	})
+
+	assert.NoError(t, err)
+
+	// Verify update
+	found, err := repo.First(ctx, gormplus.Where("id = ?", user.ID))
+	assert.NoError(t, err)
+	assert.Equal(t, 31, found.Age)
+	assert.Equal(t, "John Doe", found.Name) // Name should remain unchanged
+}
+
+func TestRepo_UpdateColumns(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := gormplus.NewRepo[User](db)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	user := &User{
+		Name:  "John Doe",
+		Email: "john@example.com",
+		Age:   30,
+	}
+
+	// Create first
+	err = repo.Create(ctx, nil, user)
+	require.NoError(t, err)
+
+	// Update multiple columns with map
+	updates := map[string]any{
+		"name": "John Updated",
+		"age":  35,
+	}
+	err = repo.UpdateColumns(ctx, nil, updates, gormplus.Where("id = ?", user.ID))
+
+	assert.NoError(t, err)
+
+	// Verify update
+	found, err := repo.First(ctx, gormplus.Where("id = ?", user.ID))
+	assert.NoError(t, err)
+	assert.Equal(t, "John Updated", found.Name)
+	assert.Equal(t, 35, found.Age)
+	assert.Equal(t, "john@example.com", found.Email) // Email should remain unchanged
+}
+
+func TestRepo_UpdateColumns_WithStruct(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := gormplus.NewRepo[User](db)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	user := &User{
+		Name:  "John Doe",
+		Email: "john@example.com",
+		Age:   30,
+	}
+
+	// Create first
+	err = repo.Create(ctx, nil, user)
+	require.NoError(t, err)
+
+	// Update multiple columns with struct
+	updates := User{
+		Name: "John Updated",
+		Age:  35,
+		// Email is not set, so it should remain unchanged
+	}
+	err = repo.UpdateColumns(ctx, nil, updates, gormplus.Where("id = ?", user.ID))
+
+	assert.NoError(t, err)
+
+	// Verify update
+	found, err := repo.First(ctx, gormplus.Where("id = ?", user.ID))
+	assert.NoError(t, err)
+	assert.Equal(t, "John Updated", found.Name)
+	assert.Equal(t, 35, found.Age)
+	assert.Equal(t, "john@example.com", found.Email) // Email should remain unchanged
+}
+
+func TestRepo_UpdateColumns_WithoutScopes(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := gormplus.NewRepo[User](db)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	updates := map[string]any{"name": "Updated Name"}
+	err = repo.UpdateColumns(ctx, nil, updates)
+
+	assert.Equal(t, gormplus.ErrDangerous, err)
+}
+
+func TestRepo_UpdateColumns_WithTransaction(t *testing.T) {
+	db := setupTestDB(t)
+	repo, err := gormplus.NewRepo[User](db)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	user := &User{
+		Name:  "John Doe",
+		Email: "john@example.com",
+		Age:   30,
+	}
+
+	// Create first
+	err = repo.Create(ctx, nil, user)
+	require.NoError(t, err)
+
+	// Update within transaction
+	err = db.Transaction(func(tx *gorm.DB) error {
+		updates := map[string]any{
+			"name": "John Updated",
+			"age":  40,
+		}
+		return repo.UpdateColumns(ctx, tx, updates, gormplus.Where("id = ?", user.ID))
+	})
+
+	assert.NoError(t, err)
+
+	// Verify update
+	found, err := repo.First(ctx, gormplus.Where("id = ?", user.ID))
+	assert.NoError(t, err)
+	assert.Equal(t, "John Updated", found.Name)
+	assert.Equal(t, 40, found.Age)
+}
+
 func TestRepo_Delete(t *testing.T) {
 	db := setupTestDB(t)
 	repo, err := gormplus.NewRepo[User](db)
