@@ -1,4 +1,4 @@
-// Package gormplus provides a generic repository pattern implementation for GORM.
+// Package gormplus provides a generic base model pattern implementation for GORM.
 // It offers a type-safe wrapper around GORM operations with support for
 // transactions, scoped queries, pagination, and common CRUD operations.
 package gormplus
@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// Common errors returned by repository operations.
+// Common errors returned by base model operations.
 var (
 	// ErrInvalidType is returned when the generic type T is not a struct type.
 	ErrInvalidType = errors.New("generic type must be a struct type")
@@ -28,10 +28,10 @@ var (
 	ErrDangerous = errors.New("dangerous operation is prohibited")
 )
 
-// Repo is a generic repository that provides common database operations
+// BaseModel is a generic base model that provides common database operations
 // for entities of type T. It wraps a GORM database instance and provides
 // type-safe methods for CRUD operations, querying, and transaction handling.
-type Repo[T any] struct {
+type BaseModel[T any] struct {
 	db *gorm.DB
 }
 
@@ -48,10 +48,10 @@ type PageResult[T any] struct {
 	HasNext  bool  `json:"has_next"`  // Whether there are more pages available
 }
 
-// NewRepo creates a new generic repository instance for type T.
+// NewBaseModel creates a new generic base model instance for type T.
 // It validates that T is a struct type.
 // Returns an error if T is not a valid struct type.
-func NewRepo[T any](db *gorm.DB) (*Repo[T], error) {
+func NewBaseModel[T any](db *gorm.DB) (*BaseModel[T], error) {
 	var zero T
 
 	t := reflect.TypeOf(zero)
@@ -62,7 +62,7 @@ func NewRepo[T any](db *gorm.DB) (*Repo[T], error) {
 		return nil, ErrInvalidType
 	}
 
-	return &Repo[T]{
+	return &BaseModel[T]{
 		db: db.Session(&gorm.Session{NewDB: false}),
 	}, nil
 }
@@ -70,7 +70,7 @@ func NewRepo[T any](db *gorm.DB) (*Repo[T], error) {
 // Transact executes the provided function within a database transaction.
 // If the function returns an error, the transaction is rolled back.
 // Otherwise, the transaction is committed.
-func (r *Repo[T]) Transact(ctx context.Context, fn func(ctx context.Context, tx *gorm.DB) error) error {
+func (r *BaseModel[T]) Transact(ctx context.Context, fn func(ctx context.Context, tx *gorm.DB) error) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error { return fn(ctx, tx) })
 }
 
@@ -119,8 +119,8 @@ func OnlyDeleted() Scope {
 
 // Create inserts a new entity into the database.
 // If tx is provided, the operation is performed within that transaction.
-// Otherwise, it uses the repository's default database connection.
-func (r *Repo[T]) Create(ctx context.Context, tx *gorm.DB, ent *T) error {
+// Otherwise, it uses the base model's default database connection.
+func (r *BaseModel[T]) Create(ctx context.Context, tx *gorm.DB, ent *T) error {
 	db := r.db
 	if tx != nil {
 		db = tx
@@ -130,8 +130,8 @@ func (r *Repo[T]) Create(ctx context.Context, tx *gorm.DB, ent *T) error {
 
 // Update saves the entity to the database, updating all fields.
 // If tx is provided, the operation is performed within that transaction.
-// Otherwise, it uses the repository's default database connection.
-func (r *Repo[T]) Update(ctx context.Context, tx *gorm.DB, ent *T) error {
+// Otherwise, it uses the base model's default database connection.
+func (r *BaseModel[T]) Update(ctx context.Context, tx *gorm.DB, ent *T) error {
 	db := r.db
 	if tx != nil {
 		db = tx
@@ -142,7 +142,7 @@ func (r *Repo[T]) Update(ctx context.Context, tx *gorm.DB, ent *T) error {
 // UpdateColumn updates a single column for records matching the provided scopes.
 // At least one scope must be provided to prevent accidental update of all records.
 // If tx is provided, the operation is performed within that transaction.
-func (r *Repo[T]) UpdateColumn(ctx context.Context, tx *gorm.DB, column string, value any, scopes ...Scope) error {
+func (r *BaseModel[T]) UpdateColumn(ctx context.Context, tx *gorm.DB, column string, value any, scopes ...Scope) error {
 	if len(scopes) == 0 {
 		return ErrDangerous
 	}
@@ -153,7 +153,7 @@ func (r *Repo[T]) UpdateColumn(ctx context.Context, tx *gorm.DB, column string, 
 // At least one scope must be provided to prevent accidental update of all records.
 // If tx is provided, the operation is performed within that transaction.
 // The updates parameter can be a map[string]any or a struct.
-func (r *Repo[T]) UpdateColumns(ctx context.Context, tx *gorm.DB, updates any, scopes ...Scope) error {
+func (r *BaseModel[T]) UpdateColumns(ctx context.Context, tx *gorm.DB, updates any, scopes ...Scope) error {
 	if len(scopes) == 0 {
 		return ErrDangerous
 	}
@@ -163,7 +163,7 @@ func (r *Repo[T]) UpdateColumns(ctx context.Context, tx *gorm.DB, updates any, s
 // Delete removes records from the database based on the provided conditions.
 // At least one scope must be provided to prevent accidental deletion of all records.
 // If tx is provided, the operation is performed within that transaction.
-func (r *Repo[T]) Delete(ctx context.Context, tx *gorm.DB, scopes ...Scope) error {
+func (r *BaseModel[T]) Delete(ctx context.Context, tx *gorm.DB, scopes ...Scope) error {
 	if len(scopes) == 0 {
 		return ErrDangerous
 	}
@@ -174,7 +174,7 @@ func (r *Repo[T]) Delete(ctx context.Context, tx *gorm.DB, scopes ...Scope) erro
 // If tx is provided, the operation is performed within that transaction.
 // The optional batchSize parameter controls how many records are inserted in each batch.
 // If not specified or zero, defaults to 1000 records per batch.
-func (r *Repo[T]) BatchInsert(ctx context.Context, tx *gorm.DB, ents []*T, batchSize ...int) error {
+func (r *BaseModel[T]) BatchInsert(ctx context.Context, tx *gorm.DB, ents []*T, batchSize ...int) error {
 	if len(ents) == 0 {
 		return nil
 	}
@@ -195,7 +195,7 @@ func (r *Repo[T]) BatchInsert(ctx context.Context, tx *gorm.DB, ents []*T, batch
 
 // First retrieves the first record that matches the provided scopes.
 // Returns ErrNotFound if no record is found.
-func (r *Repo[T]) First(ctx context.Context, scopes ...Scope) (T, error) {
+func (r *BaseModel[T]) First(ctx context.Context, scopes ...Scope) (T, error) {
 	var out T
 	if err := r.sc(ctx, scopes...).First(&out).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -208,7 +208,7 @@ func (r *Repo[T]) First(ctx context.Context, scopes ...Scope) (T, error) {
 
 // List retrieves all records that match the provided scopes.
 // Consider using Limit and Order scopes to control the result set size and ordering.
-func (r *Repo[T]) List(ctx context.Context, scopes ...Scope) ([]T, error) {
+func (r *BaseModel[T]) List(ctx context.Context, scopes ...Scope) ([]T, error) {
 	var out []T
 	if err := r.sc(ctx, scopes...).Find(&out).Error; err != nil {
 		return nil, err
@@ -217,7 +217,7 @@ func (r *Repo[T]) List(ctx context.Context, scopes ...Scope) ([]T, error) {
 }
 
 // Count returns the number of records that match the provided scopes.
-func (r *Repo[T]) Count(ctx context.Context, scopes ...Scope) (int64, error) {
+func (r *BaseModel[T]) Count(ctx context.Context, scopes ...Scope) (int64, error) {
 	var total int64
 	if err := r.sc(ctx, scopes...).Count(&total).Error; err != nil {
 		return 0, err
@@ -227,7 +227,7 @@ func (r *Repo[T]) Count(ctx context.Context, scopes ...Scope) (int64, error) {
 
 // Exists checks whether any record matching the provided scopes exists.
 // Returns true if at least one record exists, false otherwise.
-func (r *Repo[T]) Exists(ctx context.Context, scopes ...Scope) (bool, error) {
+func (r *BaseModel[T]) Exists(ctx context.Context, scopes ...Scope) (bool, error) {
 	var count int64
 	err := r.sc(ctx, scopes...).Limit(1).Count(&count).Error
 	if err != nil {
@@ -239,7 +239,7 @@ func (r *Repo[T]) Exists(ctx context.Context, scopes ...Scope) (bool, error) {
 // FirstForUpdate retrieves the first record that matches the provided scopes
 // with a SELECT FOR UPDATE lock. This method requires a transaction to be provided.
 // Returns ErrNotFound if no record is found, ErrTxRequired if no transaction is provided.
-func (r *Repo[T]) FirstForUpdate(ctx context.Context, tx *gorm.DB, scopes ...Scope) (T, error) {
+func (r *BaseModel[T]) FirstForUpdate(ctx context.Context, tx *gorm.DB, scopes ...Scope) (T, error) {
 	var zero T
 	if tx == nil {
 		return zero, ErrTxRequired
@@ -262,7 +262,7 @@ func (r *Repo[T]) FirstForUpdate(ctx context.Context, tx *gorm.DB, scopes ...Sco
 // FindForUpdate retrieves all records that match the provided scopes
 // with a SELECT FOR UPDATE lock. This method requires a transaction to be provided.
 // Returns ErrTxRequired if no transaction is provided.
-func (r *Repo[T]) FindForUpdate(ctx context.Context, tx *gorm.DB, scopes ...Scope) ([]T, error) {
+func (r *BaseModel[T]) FindForUpdate(ctx context.Context, tx *gorm.DB, scopes ...Scope) ([]T, error) {
 	var zero []T
 	if tx == nil {
 		return zero, ErrTxRequired
@@ -282,7 +282,7 @@ func (r *Repo[T]) FindForUpdate(ctx context.Context, tx *gorm.DB, scopes ...Scop
 // Page retrieves a paginated result set based on the provided scopes.
 // Page numbers are 1-based. If page <= 0, defaults to 1.
 // If pageSize <= 0, defaults to 20. Maximum pageSize is capped at 1000.
-func (r *Repo[T]) Page(ctx context.Context, page, pageSize int, scopes ...Scope) (PageResult[T], error) {
+func (r *BaseModel[T]) Page(ctx context.Context, page, pageSize int, scopes ...Scope) (PageResult[T], error) {
 	if page <= 0 {
 		page = 1
 	}
@@ -319,7 +319,7 @@ func (r *Repo[T]) Page(ctx context.Context, page, pageSize int, scopes ...Scope)
 
 // sc creates a base query with context and model, then applies the provided scopes.
 // This is the unified starting point for all query operations.
-func (r *Repo[T]) sc(ctx context.Context, scopes ...Scope) *gorm.DB {
+func (r *BaseModel[T]) sc(ctx context.Context, scopes ...Scope) *gorm.DB {
 	db := r.db.WithContext(ctx).Model(new(T))
 	for _, s := range scopes {
 		if s != nil {
@@ -330,8 +330,8 @@ func (r *Repo[T]) sc(ctx context.Context, scopes ...Scope) *gorm.DB {
 }
 
 // scWithTX creates a base query with context and model using the provided transaction,
-// then applies the provided scopes. If db is nil, falls back to the repository's default DB.
-func (r *Repo[T]) scWithTX(db *gorm.DB, ctx context.Context, scopes ...Scope) *gorm.DB {
+// then applies the provided scopes. If db is nil, falls back to the base model's default DB.
+func (r *BaseModel[T]) scWithTX(db *gorm.DB, ctx context.Context, scopes ...Scope) *gorm.DB {
 	if db == nil {
 		db = r.db
 	}

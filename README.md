@@ -1,6 +1,6 @@
 # GORM Plus
 
-A type-safe generic repository pattern implementation for GORM, providing a clean and consistent interface for common database operations.
+A type-safe generic base model pattern implementation for GORM, providing a clean and consistent interface for common database operations.
 
 ## Features
 
@@ -49,8 +49,8 @@ func main() {
     // Auto migrate
     db.AutoMigrate(&User{})
 
-    // Create repository
-    userRepo, err := gormplus.NewRepo[User](db)
+    // Create base model
+    userBaseModel, err := gormplus.NewBaseModel[User](db)
     if err != nil {
         log.Fatal(err)
     }
@@ -59,13 +59,13 @@ func main() {
 
     // Create a user
     user := &User{Name: "John Doe", Email: "john@example.com", Age: 30}
-    err = userRepo.Create(ctx, nil, user)
+    err = userBaseModel.Create(ctx, nil, user)
     if err != nil {
         log.Fatal(err)
     }
 
     // Find user by email
-    foundUser, err := userRepo.First(ctx, gormplus.Where("email = ?", "john@example.com"))
+    foundUser, err := userBaseModel.First(ctx, gormplus.Where("email = ?", "john@example.com"))
     if err != nil {
         log.Fatal(err)
     }
@@ -76,13 +76,13 @@ func main() {
 
 ## Core Components
 
-### Repository
+### Base Model
 
-The `Repo[T]` type is the main component that provides database operations for entities of type T.
+The `BaseModel[T]` type is the main component that provides database operations for entities of type T.
 
 ```go
-// Create a new repository instance
-userRepo, err := gormplus.NewRepo[User](db)
+// Create a new base model instance
+userBaseModel, err := gormplus.NewBaseModel[User](db)
 ```
 
 ### Scopes
@@ -91,14 +91,14 @@ Scopes are composable functions that modify GORM queries:
 
 ```go
 // Basic conditions
-users, err := userRepo.List(ctx,
+users, err := userBaseModel.List(ctx,
     gormplus.Where("age > ?", 25),
     gormplus.Order("name ASC"),
     gormplus.Limit(10),
 )
 
 // Map-based conditions
-users, err := userRepo.List(ctx,
+users, err := userBaseModel.List(ctx,
     gormplus.WhereEq(map[string]any{
         "active": true,
         "role":   "admin",
@@ -124,40 +124,40 @@ users, err := userRepo.List(ctx,
 ```go
 // Create
 user := &User{Name: "Jane Doe", Email: "jane@example.com"}
-err := userRepo.Create(ctx, nil, user)
+err := userBaseModel.Create(ctx, nil, user)
 
 // Update
 user.Age = 25
-err = userRepo.Update(ctx, nil, user)
+err = userBaseModel.Update(ctx, nil, user)
 
 // Delete (soft delete if DeletedAt field exists)
-err = userRepo.Delete(ctx, nil, gormplus.Where("id = ?", user.ID))
+err = userBaseModel.Delete(ctx, nil, gormplus.Where("id = ?", user.ID))
 ```
 
 ### Query Operations
 
 ```go
 // Find first record
-user, err := userRepo.First(ctx, gormplus.Where("email = ?", "john@example.com"))
+user, err := userBaseModel.First(ctx, gormplus.Where("email = ?", "john@example.com"))
 
 // List records
-users, err := userRepo.List(ctx,
+users, err := userBaseModel.List(ctx,
     gormplus.Where("age > ?", 18),
     gormplus.Order("name ASC"),
 )
 
 // Count records
-count, err := userRepo.Count(ctx, gormplus.Where("active = ?", true))
+count, err := userBaseModel.Count(ctx, gormplus.Where("active = ?", true))
 
 // Check existence
-exists, err := userRepo.Exists(ctx, gormplus.Where("email = ?", "test@example.com"))
+exists, err := userBaseModel.Exists(ctx, gormplus.Where("email = ?", "test@example.com"))
 ```
 
 ### Pagination
 
 ```go
 // Get paginated results
-result, err := userRepo.Page(ctx, 1, 20, // page 1, 20 items per page
+result, err := userBaseModel.Page(ctx, 1, 20, // page 1, 20 items per page
     gormplus.Where("active = ?", true),
     gormplus.Order("created_at DESC"),
 )
@@ -181,24 +181,24 @@ users := []*User{
 }
 
 // Batch insert with default batch size (1000)
-err := userRepo.BatchInsert(ctx, nil, users)
+err := userBaseModel.BatchInsert(ctx, nil, users)
 
 // Batch insert with custom batch size
-err = userRepo.BatchInsert(ctx, nil, users, 100)
+err = userBaseModel.BatchInsert(ctx, nil, users, 100)
 ```
 
 ### Transactions
 
 ```go
 // Manual transaction management
-err := userRepo.Transact(ctx, func(ctx context.Context, tx *gorm.DB) error {
+err := userBaseModel.Transact(ctx, func(ctx context.Context, tx *gorm.DB) error {
     user1 := &User{Name: "User 1", Email: "user1@example.com"}
-    if err := userRepo.Create(ctx, tx, user1); err != nil {
+    if err := userBaseModel.Create(ctx, tx, user1); err != nil {
         return err
     }
 
     user2 := &User{Name: "User 2", Email: "user2@example.com"}
-    if err := userRepo.Create(ctx, tx, user2); err != nil {
+    if err := userBaseModel.Create(ctx, tx, user2); err != nil {
         return err
     }
 
@@ -207,14 +207,14 @@ err := userRepo.Transact(ctx, func(ctx context.Context, tx *gorm.DB) error {
 
 // Row locking (requires transaction)
 err = db.Transaction(func(tx *gorm.DB) error {
-    user, err := userRepo.FirstForUpdate(ctx, tx, gormplus.Where("id = ?", 1))
+    user, err := userBaseModel.FirstForUpdate(ctx, tx, gormplus.Where("id = ?", 1))
     if err != nil {
         return err
     }
 
     // Modify user safely
     user.Balance += 100
-    return userRepo.Update(ctx, tx, &user)
+    return userBaseModel.Update(ctx, tx, &user)
 })
 ```
 
@@ -224,7 +224,7 @@ The library defines several standard errors:
 
 ```go
 // Check for specific errors
-user, err := userRepo.First(ctx, gormplus.Where("id = ?", 999))
+user, err := userBaseModel.First(ctx, gormplus.Where("id = ?", 999))
 if errors.Is(err, gormplus.ErrNotFound) {
     // Handle not found case
 }

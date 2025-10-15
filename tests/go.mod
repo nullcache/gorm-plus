@@ -9,6 +9,8 @@ require (
 	gorm.io/gorm v1.30.5
 )
 
+replace github.com/nullcache/gorm-plus => ../
+
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
